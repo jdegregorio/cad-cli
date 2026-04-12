@@ -87,6 +87,12 @@ Use the lightest validation that can still prove the claim, then escalate when r
 - validate metrics JSON and short summary outputs
 - prefer exact CAD-solid comparison when possible; document fallbacks clearly
 
+### Do when behavior touches inspection
+
+- validate reported measurements against known fixtures when possible
+- verify volume, dimension, and feature-summary outputs are internally consistent
+- confirm export confirmation and metadata reflect actual generated artifacts
+
 ### Do when behavior touches packaging or integration
 
 - validate archive/bundle contents
@@ -159,6 +165,7 @@ Ask before:
 - `cad render` should emit deterministic preview assets and render metadata
 - `cad compare` should support evaluation, revision-to-revision, and imported-reference comparisons
 - `cad inspect` should provide lightweight deterministic measurements without requiring full comparison
+- `cad package` should collect authoritative, presentation, and optional review/eval artifacts into a clean bundle
 
 ## Good agent behavior
 

@@ -129,6 +129,25 @@ Typical uses:
 - thickness checks
 - hole diameters
 - center distances
+- volume
+- face counts or feature-like summaries where practical
+- export confirmation
+
+This command is especially important for both the internal review loop and developer evals.
+
+### `cad package`
+
+Purpose: collect outputs into a clean bundle for download or archival.
+
+Typical contents:
+
+- STEP
+- GLB
+- render sheet
+- model source
+- metadata
+- optional review summary
+- optional compare or eval outputs
 
 ## Relationship to Formloop
 
