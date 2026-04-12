@@ -18,24 +18,29 @@ This repo is not the agent orchestration layer. Keep it portable and boring.
 
 ## Core operating rules
 
-1. **Closed-loop validation is mandatory**
+1. **Root spec files are source of truth**
+   - Always check the repository root for `spec.md` and `requirements.md` before implementing non-trivial work.
+   - Follow those files closely when they exist.
+   - If repo docs conflict, treat `requirements.md` and `spec.md` as higher priority unless explicitly told otherwise.
+
+2. **Closed-loop validation is mandatory**
    - Do not declare work complete until you have run the relevant validation steps.
    - Every functional change must include evidence that the behavior works as designed.
    - If validation is blocked, say exactly what is unverified and what remains to prove.
 
-2. **Determinism over cleverness**
+3. **Determinism over cleverness**
    - Prefer explicit inputs, explicit outputs, stable file names, and stable command contracts.
    - Avoid hidden state, ambient configuration, and behavior that depends on machine-specific quirks unless clearly documented.
 
-3. **STEP is authoritative, GLB is presentational**
+4. **STEP is authoritative, GLB is presentational**
    - Preserve the separation between CAD truth and rendering assets.
    - Do not let rendering concerns distort the core geometry pipeline.
 
-4. **Comparison is first-class**
+5. **Comparison is first-class**
    - Treat geometric comparison as a product feature, not an afterthought.
    - Alignment, overlap, and delta calculations should be explicit stages.
 
-5. **Small diffs, clear contracts**
+6. **Small diffs, clear contracts**
    - Prefer focused changes over repo-wide rewrites.
    - Update interfaces intentionally and document contract changes.
 
@@ -49,6 +54,7 @@ A task is not done unless all relevant items below are satisfied:
 - output artifacts are checked for expected existence and shape
 - failure modes are validated where practical
 - docs are updated when command behavior or artifacts change
+- `requirements.md` is updated to reflect the latest status of affected requirements when that file exists
 - any billing, runtime cost, or external tool invocation implications are noted when relevant
 
 If any item is skipped, explain why.
@@ -168,6 +174,17 @@ Ask before:
 - `cad package` should collect authoritative, presentation, and optional review/eval artifacts into a clean bundle
 - keep manufacturing or slicer validation outside the core path unless `cad validate` is intentionally being added as an optional downstream capability
 
+## Requirements tracking
+
+When `requirements.md` exists in the repo root:
+
+- treat it as the canonical checklist for what counts as done
+- consult it before starting meaningful implementation work
+- update the status field of each affected requirement as development progresses
+- mark requirements completed only when implementation and validation both support that claim
+- keep requirement statuses honest; do not mark something done because most of it exists
+- if work is partial, reflect partial status clearly rather than collapsing nuance
+
 ## Good agent behavior
 
 - be explicit about assumptions
@@ -175,6 +192,7 @@ Ask before:
 - mention what is still unproven
 - prefer one clean path over multiple half-working options
 - keep the repo usable by humans, CI, and Formloop
+- use `requirements.md` as the single source of truth for completion status when available
 
 ## Bad agent behavior
 
