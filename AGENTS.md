@@ -76,6 +76,7 @@ Use the lightest validation that can still prove the claim, then escalate when r
 - verify GLB export exists and is loadable
 - run Blender render path end-to-end where feasible
 - confirm rendered outputs are produced at expected paths with expected naming
+- verify expected standard views are produced when applicable, including front, right, top, iso, and composite sheet
 - sanity check camera, lighting, and output conventions against repository rules
 
 ### Do when behavior touches comparison
@@ -83,6 +84,7 @@ Use the lightest validation that can still prove the claim, then escalate when r
 - test identical-shape equality path
 - test known-different-shape delta path
 - test alignment-sensitive scenarios separately from pure overlap/delta logic
+- validate metrics JSON and short summary outputs
 - prefer exact CAD-solid comparison when possible; document fallbacks clearly
 
 ### Do when behavior touches packaging or integration
@@ -153,6 +155,10 @@ Ask before:
 - geometry creation and rendering remain separate concerns
 - exact CAD-solid comparison is preferred when possible
 - alignment is a separate stage from overlap and delta computation
+- `cad build` should emit standard build artifacts
+- `cad render` should emit deterministic preview assets and render metadata
+- `cad compare` should support evaluation, revision-to-revision, and imported-reference comparisons
+- `cad inspect` should provide lightweight deterministic measurements without requiring full comparison
 
 ## Good agent behavior
 

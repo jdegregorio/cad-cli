@@ -59,6 +59,77 @@ cad package ...
 cad validate ...
 ```
 
+## CLI specification
+
+### `cad build`
+
+Purpose: execute or parameterize a `build123d` model and emit standard artifacts.
+
+Inputs may include:
+
+- model source
+- parameter file
+- working directory
+- output directory
+
+Outputs should include:
+
+- STEP
+- GLB
+- metadata
+- optionally STL
+- optionally normalized source snapshot
+
+### `cad render`
+
+Purpose: render a GLB model into deterministic preview assets using Blender.
+
+Inputs may include:
+
+- GLB path
+- render spec
+- output directory
+
+Outputs should include:
+
+- front view
+- right view
+- top view
+- iso view
+- composite contact sheet
+- render metadata
+
+### `cad compare`
+
+Purpose: compare two geometries when two geometries are available.
+
+Typical uses:
+
+- candidate vs ground truth in evals
+- candidate vs prior revision
+- candidate vs imported reference geometry
+- optional future derived geometry comparisons
+
+Outputs should include:
+
+- metrics JSON
+- short summary
+- overlap metrics
+- optional diff solids or meshes
+- optional visual review assets
+
+### `cad inspect`
+
+Purpose: provide lightweight deterministic inspection without requiring full comparison.
+
+Typical uses:
+
+- bounding box
+- overall dimensions
+- thickness checks
+- hole diameters
+- center distances
+
 ## Relationship to Formloop
 
 Formloop is the main application and agentic orchestration layer. It should treat `cad-cli` as a deterministic subsystem, not as a place to hide application logic.
