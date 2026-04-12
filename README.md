@@ -149,6 +149,24 @@ Typical contents:
 - optional review summary
 - optional compare or eval outputs
 
+### `cad validate` (future)
+
+Purpose: optional downstream manufacturability or printability validation.
+
+This is intentionally outside the core design loop for the first version.
+
+If added later, a sensible structure is:
+
+- a geometry-aware pre-analysis layer
+- a slicer-backed validation layer, with PrusaSlicer as the portable default and Bambu Studio as an optional target-specific second pass
+
+Useful future signals may include:
+
+- unsupported overhang area
+- bridge risk
+- mid-air islands
+- support-contact pain proxy
+
 ## Relationship to Formloop
 
 Formloop is the main application and agentic orchestration layer. It should treat `cad-cli` as a deterministic subsystem, not as a place to hide application logic.

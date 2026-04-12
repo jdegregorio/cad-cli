@@ -166,6 +166,7 @@ Ask before:
 - `cad compare` should support evaluation, revision-to-revision, and imported-reference comparisons
 - `cad inspect` should provide lightweight deterministic measurements without requiring full comparison
 - `cad package` should collect authoritative, presentation, and optional review/eval artifacts into a clean bundle
+- keep manufacturing or slicer validation outside the core path unless `cad validate` is intentionally being added as an optional downstream capability
 
 ## Good agent behavior
 
