@@ -111,6 +111,7 @@ uv run cad package --output out/review.zip --build-dir out/build --render-dir ou
 - Summary, bounding box, volume, holes, center distance, and thickness queries
 - Richest feature support is available on exact STEP solids
 - Unsupported mesh-only operations fail clearly instead of silently guessing
+- Mesh thickness probing may require the optional `rtree` dependency; STEP remains the preferred authoritative inspect input
 
 ### `cad package`
 
