@@ -1,190 +1,144 @@
 # cad-cli
 
-Deterministic CAD CLI for building, rendering, comparing, inspecting, and packaging 3D design artifacts.
+Deterministic CAD command-line tooling for building, rendering, comparing, inspecting, and packaging 3D design artifacts.
 
-`cad-cli` is the portable tool layer for the Formloop stack. It is intentionally separate from agent orchestration and UI concerns so it can be used by humans, CI pipelines, and other systems as a stable geometry toolchain.
+`cad-cli` is the portable geometry toolchain used by [Formloop](https://github.com/jdegregorio/formloop/tree/main). It keeps CAD generation, preview rendering, and artifact comparison in a stable CLI that can be used locally, in CI, or from another application without bringing along orchestration logic.
 
-## Purpose
+## Why it exists
 
-This repo exists to provide a unified command-line interface for deterministic CAD operations:
+- STEP is the authoritative artifact for CAD truth.
+- GLB is the standard presentation artifact for preview and rendering.
+- Comparison and inspection need deterministic, scriptable outputs.
+- Downstream systems need clean bundles and machine-readable metadata.
 
-- **build**: create geometry from Python-native CAD definitions, with `build123d` as the primary modeling backend
-- **render**: produce consistent preview assets using Blender as the standard renderer
-- **compare**: evaluate geometric similarity and deltas, with exact CAD-solid comparison where possible
-- **inspect**: expose artifact metadata, dimensions, topology, and export details
-- **package**: bundle authoritative and presentation artifacts for downstream use
-- **validate** (future): run deterministic structural and artifact integrity checks
+Project background and deeper architecture notes live in [SPEC.md](/Users/jdegregorio/Repos/cad-cli/SPEC.md).
 
-## Architectural role
+## Install
 
-`cad-cli` owns the deterministic core. It should be safe to call repeatedly, easy to script, and boring in the best possible way.
-
-### In scope
-
-- CAD build pipeline based on `build123d`
-- STEP as the authoritative CAD artifact
-- GLB as the standard presentation/render handoff artifact
-- Blender-based rendering scripts and conventions
-- Geometry comparison utilities
-- Artifact inspection and packaging
-- Stable CLI contracts for local use and CI
-
-### Out of scope
-
-- Multi-agent task orchestration
-- Chat UX or application UI
-- Prompting or skill management
-- Dataset and eval orchestration at the app layer
-- Long-lived design session state
-
-## Design principles
-
-- **Deterministic by default**: same inputs should produce the same outputs, or explicitly explain why not
-- **Artifact traceability**: every command should make it easy to understand what was created, from what, and where it went
-- **Geometry first**: rendering is downstream of geometry, not a substitute for it
-- **Clean separation of concerns**: modeling, rendering, comparison, and packaging should stay composable
-- **CI-friendly**: commands should be scriptable and machine-readable where practical
-
-## Planned command surface
-
-The repo should expose a unified deterministic `cad` command surface via the `cad-cli` package.
+Python 3.12+ and [`uv`](https://docs.astral.sh/uv/) are the supported defaults.
 
 ```bash
-cad build ...
-cad render ...
-cad compare ...
-cad inspect ...
-cad package ...
-# future
-cad validate ...
+uv sync --extra dev
 ```
 
-## CLI specification
+Install Blender for the render pipeline:
+
+```bash
+brew install --cask blender
+```
+
+`cad render` discovers Blender through:
+
+1. `--blender-bin`
+2. `CAD_BLENDER_BIN`
+3. `PATH`
+
+## Quickstart
+
+Build a sample model:
+
+```bash
+uv run cad build examples/models/cube.py --output-dir out/build --emit-stl --snapshot-source
+```
+
+Render the generated GLB:
+
+```bash
+uv run cad render out/build/model.glb --output-dir out/render
+```
+
+Compare two revisions:
+
+```bash
+uv run cad compare out/a/model.step out/b/model.step --output-dir out/compare --align principal --emit-diff-solids
+```
+
+Inspect exact geometry:
+
+```bash
+uv run cad inspect holes out/build/model.step --format json
+uv run cad inspect center-distance out/build/model.step --feature-a hole-1 --feature-b hole-2
+uv run cad inspect thickness out/build/model.step --point 0,9,0 --direction y
+```
+
+Package outputs:
+
+```bash
+uv run cad package --output out/review.zip --build-dir out/build --render-dir out/render --compare-dir out/compare
+```
+
+## Command Overview
 
 ### `cad build`
 
-Purpose: execute or parameterize a `build123d` model and emit standard artifacts.
-
-Inputs may include:
-
-- model source
-- parameter file
-- working directory
-- output directory
-
-Outputs should include:
-
-- STEP
-- GLB
-- metadata
-- optionally STL
-- optionally normalized source snapshot
+- Input: local Python model file
+- Contract: `build_model(params, context)` returns a `build123d` shape
+- Outputs:
+  - `model.step`
+  - `model.glb`
+  - `build-metadata.json`
+  - optional `model.stl`
+  - optional `source-snapshot.py`
 
 ### `cad render`
 
-Purpose: render a GLB model into deterministic preview assets using Blender.
-
-Inputs may include:
-
-- GLB path
-- render spec
-- output directory
-
-Outputs should include:
-
-- front view
-- right view
-- top view
-- iso view
-- composite contact sheet
-- render metadata
+- Input: GLB
+- Backend: Blender in background mode
+- Outputs:
+  - `front.png`
+  - `back.png`
+  - `left.png`
+  - `right.png`
+  - `top.png`
+  - `bottom.png`
+  - `iso.png`
+- `sheet.png`
+- `render-metadata.json`
+- All preview images are framed to show the full part without clipping.
+- The default view set includes datum-oriented orthographic views plus an angled isometric view.
+- Blender-native outline rendering emphasizes visible edges and feature transitions for verification-oriented review without adding image noise.
+- The default verification shader uses a neutral light material with balanced fill lighting so top and bottom datum views stay visually consistent.
 
 ### `cad compare`
 
-Purpose: compare two geometries when two geometries are available.
-
-Typical uses:
-
-- candidate vs ground truth in evals
-- candidate vs prior revision
-- candidate vs imported reference geometry
-- optional future derived geometry comparisons
-
-Outputs should include:
-
-- metrics JSON
-- short summary
-- overlap metrics
-- optional diff solids or meshes
-- optional visual review assets
+- Exact-solid comparison for STEP when available
+- Mesh fallback for GLB/STL
+- Outputs `compare-metrics.json` with `schema_version: 1`
+- Optional exact diff exports: `shared.step`, `left_only.step`, `right_only.step`
 
 ### `cad inspect`
 
-Purpose: provide lightweight deterministic inspection without requiring full comparison.
-
-Typical uses:
-
-- bounding box
-- overall dimensions
-- thickness checks
-- hole diameters
-- center distances
-- volume
-- face counts or feature-like summaries where practical
-- export confirmation
-
-This command is especially important for both the internal review loop and developer evals.
+- Summary, bounding box, volume, holes, center distance, and thickness queries
+- Richest feature support is available on exact STEP solids
+- Unsupported mesh-only operations fail clearly instead of silently guessing
 
 ### `cad package`
 
-Purpose: collect outputs into a clean bundle for download or archival.
+- Bundles build, render, compare, and extra files into a zip archive
+- Emits `package-manifest.json` with hashes and source references
 
-Typical contents:
+## Artifact and Metadata Conventions
 
-- STEP
-- GLB
-- render sheet
-- model source
-- metadata
-- optional review summary
-- optional compare or eval outputs
+- All machine-readable results use `schema_version: 1`.
+- Build metadata preserves source model path, params, command args, and tool versions.
+- Render metadata records the input GLB, Blender binary, and render spec.
+- Compare metadata records both input paths, alignment mode, and comparison mode.
+- Package manifests record archive layout, source paths, hashes, and packaging inputs.
 
-### `cad validate` (future)
+## Exact vs Fallback Compare
 
-Purpose: optional downstream manufacturability or printability validation.
+- STEP inputs use exact CAD-solid comparison.
+- GLB/STL inputs use a mesh fallback and label the comparison mode as `mesh_fallback`.
+- Alignment is always recorded separately from overlap metrics.
 
-This is intentionally outside the core design loop for the first version.
+## Validation
 
-If added later, a sensible structure is:
+Development validation is managed with `uv`:
 
-- a geometry-aware pre-analysis layer
-- a slicer-backed validation layer, with PrusaSlicer as the portable default and Bambu Studio as an optional target-specific second pass
+```bash
+uv run ruff check src tests
+uv run mypy src
+uv run pytest -q
+```
 
-Useful future signals may include:
-
-- unsupported overhang area
-- bridge risk
-- mid-air islands
-- support-contact pain proxy
-
-## Relationship to Formloop
-
-Formloop is the main application and agentic orchestration layer. It should treat `cad-cli` as a deterministic subsystem, not as a place to hide application logic.
-
-A useful rule of thumb:
-
-- if the behavior should be portable, testable, and usable without the app, it probably belongs in `cad-cli`
-- if the behavior depends on agents, UX, datasets, or run-state orchestration, it probably belongs in Formloop
-
-## Initial development priorities
-
-1. Define the CLI contract and artifact conventions
-2. Implement build flow with `build123d`
-3. Implement GLB export and Blender render pipeline
-4. Implement exact-or-best-available geometry comparison flow
-5. Add inspection and packaging commands
-6. Establish repeatable validation fixtures and golden artifacts
-
-## Status
-
-Early repo setup. The goal right now is to establish the contract and operating principles before adding full scaffolding.
+The render test uses a real local Blender install. If Blender is unavailable, only the render-specific pytest case is skipped.

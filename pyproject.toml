@@ -1,0 +1,50 @@
+[project]
+name = "cad-cli"
+version = "0.1.0"
+description = "Deterministic CAD CLI for building, rendering, comparing, inspecting, and packaging 3D artifacts."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "John DeGregorio" }
+]
+dependencies = [
+  "build123d>=0.10.0,<0.11.0",
+  "manifold3d>=3.2.1,<4.0.0",
+  "numpy>=2.3.0,<3.0.0",
+  "pillow>=11.2.0,<12.0.0",
+  "trimesh>=4.7.0,<5.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.16.0,<2.0.0",
+  "pytest>=8.4.0,<9.0.0",
+  "ruff>=0.11.0,<0.12.0",
+]
+
+[project.scripts]
+cad = "cad_cli.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cad_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+strict = true
+packages = ["cad_cli"]
