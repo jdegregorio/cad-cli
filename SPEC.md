@@ -99,6 +99,7 @@ The project exists to provide one stable `cad` command surface for deterministic
 - `cad inspect thickness <artifact> --point x,y,z --direction x|y|z`
 
 Exact STEP solids provide the richest inspection features. Mesh artifacts degrade gracefully and report unsupported operations clearly.
+Mesh thickness probing may require the optional `rtree` dependency; STEP remains the preferred authoritative input for exact inspect flows.
 
 ### `cad package`
 

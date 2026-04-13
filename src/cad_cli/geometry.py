@@ -259,10 +259,16 @@ def exact_thickness(shape: Any, point: Vector, direction: Vector) -> float:
 def mesh_thickness(mesh: trimesh.Trimesh, point: np.ndarray, direction: np.ndarray) -> float:
     origins = np.vstack([point - direction * 1e3, point + direction * 1e3])
     directions = np.vstack([direction, -direction])
-    locations, _index_ray, _index_tri = mesh.ray.intersects_location(  # type: ignore[no-untyped-call]
-        origins,
-        directions,
-    )
+    try:
+        locations, _index_ray, _index_tri = mesh.ray.intersects_location(  # type: ignore[no-untyped-call]
+            origins,
+            directions,
+        )
+    except ModuleNotFoundError as exc:
+        raise UnsupportedOperationError(
+            "Mesh thickness probing requires the optional 'rtree' dependency; "
+            "install it or use a STEP/exact solid artifact."
+        ) from exc
     if len(locations) < 2:
         raise UnsupportedOperationError(
             "Mesh thickness probing needs at least two ray intersections"
@@ -271,7 +277,14 @@ def mesh_thickness(mesh: trimesh.Trimesh, point: np.ndarray, direction: np.ndarr
     projected.sort()
     for start, end in zip(projected, projected[1:], strict=False):
         midpoint = point + direction * ((start + end) / 2.0)
-        if mesh.contains([midpoint])[0]:
+        try:
+            contains_midpoint = bool(mesh.contains([midpoint])[0])
+        except ModuleNotFoundError as exc:
+            raise UnsupportedOperationError(
+                "Mesh thickness probing requires the optional 'rtree' dependency; "
+                "install it or use a STEP/exact solid artifact."
+            ) from exc
+        if contains_midpoint:
             if start <= 0.0 <= end:
                 return float(end - start)
     raise UnsupportedOperationError(
