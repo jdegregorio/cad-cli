@@ -77,6 +77,9 @@ def build_parser() -> CadArgumentParser:
         "--align", choices=["none", "translate", "principal"], default="none"
     )
     compare_parser.add_argument("--emit-diff-solids", action="store_true")
+    compare_parser.add_argument("--render-diffs", action="store_true")
+    compare_parser.add_argument("--blender-bin", type=Path)
+    compare_parser.add_argument("--render-spec", type=Path)
     compare_parser.add_argument("--format", choices=["text", "json"], default="text")
 
     inspect_parser = subparsers.add_parser("inspect", help="Inspect a single artifact")
@@ -165,6 +168,9 @@ def main(argv: list[str] | None = None) -> int:
                 output_dir=args.output_dir,
                 alignment=args.align,
                 emit_diff_solids=args.emit_diff_solids,
+                render_diffs=args.render_diffs,
+                blender_bin=args.blender_bin,
+                render_spec_path=args.render_spec,
             )
             emit_result(result, args.format)
             return 0

@@ -26,6 +26,31 @@ DEFAULT_RENDER_SPEC: dict[str, Any] = {
     "engine": "BLENDER_EEVEE",
 }
 
+# Color palette for compare diff rendering (linear sRGB for Blender Principled BSDF).
+COMPARE_COLORS: dict[str, list[float]] = {
+    "left": [0.22, 0.50, 0.82, 1.0],
+    "right": [0.90, 0.55, 0.08, 1.0],
+    "shared": [0.20, 0.70, 0.32, 1.0],
+    "left_only": [0.22, 0.50, 0.82, 1.0],
+    "right_only": [0.90, 0.55, 0.08, 1.0],
+}
+
+# Label-friendly display names and banner colors (PIL RGB) for the compare sheet.
+COMPARE_LABELS: dict[str, str] = {
+    "left": "LEFT",
+    "right": "RIGHT",
+    "shared": "SHARED",
+    "left_only": "LEFT ONLY",
+    "right_only": "RIGHT ONLY",
+}
+COMPARE_BANNER_COLORS: dict[str, tuple[int, int, int]] = {
+    "left": (80, 130, 175),
+    "right": (200, 155, 40),
+    "shared": (80, 165, 90),
+    "left_only": (60, 110, 175),
+    "right_only": (200, 155, 40),
+}
+
 
 def blender_script_path() -> Path:
     return Path(__file__).with_name("blender").joinpath("render_glb.py")
@@ -77,6 +102,113 @@ def compose_sheet(output_dir: Path, width: int, height: int) -> Path:
         draw.text((x + 14, y + 9), label.upper(), fill=(32, 32, 32))
     canvas.save(sheet_path)
     return sheet_path
+
+
+def render_single_view(
+    *,
+    glb_path: Path,
+    output_path: Path,
+    blender_bin: Path | None,
+    view: str = "iso",
+    base_color: list[float] | None = None,
+    spec_overrides: dict[str, Any] | None = None,
+) -> Path:
+    """Render one view of a GLB file with an optional material colour.
+
+    The image is written to *output_path*.  Intermediate Blender output is
+    placed in a temporary sibling directory to avoid collisions.
+    """
+    resolved_blender = resolve_blender_binary(blender_bin)
+    render_script = blender_script_path()
+    if not render_script.exists():
+        raise RenderError(f"Blender helper script is missing: {render_script}")
+
+    spec: dict[str, Any] = dict(DEFAULT_RENDER_SPEC)
+    if spec_overrides:
+        spec.update(spec_overrides)
+    spec["views"] = [view]
+    if base_color is not None:
+        spec["base_color"] = base_color
+
+    # Render into a dedicated temp directory so parallel calls don't collide.
+    temp_dir = output_path.parent / f".render-tmp-{output_path.stem}"
+    ensure_directory(temp_dir)
+    command = [
+        str(resolved_blender),
+        "--background",
+        "--factory-startup",
+        "--python",
+        str(render_script),
+        "--",
+        str(glb_path.resolve()),
+        str(temp_dir.resolve()),
+        json.dumps(spec),
+    ]
+    process = subprocess.run(command, capture_output=True, text=True)
+    if process.returncode != 0:
+        raise RenderError(
+            f"Single-view render failed for {glb_path.name}:\n"
+            f"STDERR:\n{process.stderr}"
+        )
+    rendered = temp_dir / f"{view}.png"
+    if not rendered.exists():
+        raise RenderError(f"Blender did not produce expected view: {rendered}")
+    import shutil as _shutil
+
+    _shutil.move(str(rendered), str(output_path))
+    _shutil.rmtree(temp_dir, ignore_errors=True)
+    return output_path
+
+
+def compose_compare_sheet(
+    image_paths: dict[str, Path],
+    output_path: Path,
+    cell_width: int,
+    cell_height: int,
+) -> Path:
+    """Compose individual diff renders into a labelled comparison sheet.
+
+    Layout: up to 3 columns × 2 rows.  Row 1 = LEFT, RIGHT, SHARED.
+    Row 2 = LEFT ONLY, RIGHT ONLY.  Cells for zero-volume pieces are
+    rendered as light grey placeholders.
+    """
+    ordered = ["left", "right", "shared", "left_only", "right_only"]
+    columns = 3
+    rows = 2
+    banner_h = 36
+    canvas_w = cell_width * columns
+    canvas_h = (cell_height + banner_h) * rows
+    canvas = Image.new("RGB", (canvas_w, canvas_h), color=(235, 235, 235))
+    draw = ImageDraw.Draw(canvas)
+
+    for index, role in enumerate(ordered):
+        col = index % columns
+        row = index // columns
+        x = col * cell_width
+        y = row * (cell_height + banner_h)
+
+        # Banner
+        banner_color = COMPARE_BANNER_COLORS.get(role, (100, 100, 100))
+        draw.rectangle((x, y, x + cell_width, y + banner_h), fill=banner_color)
+        label = COMPARE_LABELS.get(role, role.upper())
+        draw.text((x + 14, y + 9), label, fill=(255, 255, 255))
+
+        # Image or placeholder
+        img_y = y + banner_h
+        if role in image_paths and image_paths[role].exists():
+            img = Image.open(image_paths[role]).convert("RGB")
+            img = img.resize((cell_width, cell_height), Image.Resampling.LANCZOS)
+            canvas.paste(img, (x, img_y))
+        else:
+            draw.rectangle((x, img_y, x + cell_width, img_y + cell_height), fill=(215, 215, 215))
+            draw.text(
+                (x + cell_width // 2 - 30, img_y + cell_height // 2 - 8),
+                "empty",
+                fill=(160, 160, 160),
+            )
+
+    canvas.save(output_path)
+    return output_path
 
 
 def run_render(

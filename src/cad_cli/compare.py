@@ -6,16 +6,37 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import trimesh
-from build123d import export_step
+from build123d import Compound, export_gltf, export_step
 
 from .artifacts import collect_file_artifact, ensure_directory, write_json
 from .errors import CompareError, GeometryError, UnsupportedOperationError
 from .geometry import align_exact_shapes, align_meshes, load_geometry_artifact
+from .render import (
+    COMPARE_COLORS,
+    compose_compare_sheet,
+    load_render_spec,
+    render_single_view,
+)
 from .schemas import CompareMetrics, CompareResult
 
 
 def _safe_volume_exact(shape: Any) -> float:
-    return float(getattr(shape, "volume", 0.0) or 0.0)
+    volume = getattr(shape, "volume", None)
+    if volume is not None:
+        return float(volume)
+    # build123d boolean ops may return a ShapeList of disjoint solids.
+    if hasattr(shape, "__iter__"):
+        return sum(float(getattr(s, "volume", 0.0) or 0.0) for s in shape)
+    return 0.0
+
+
+def _to_exportable(shape: Any) -> Any:
+    """Wrap a ShapeList in a Compound so it can be passed to export_step."""
+    if hasattr(shape, "wrapped"):
+        return shape
+    if hasattr(shape, "__iter__"):
+        return Compound(children=list(shape))
+    return shape
 
 
 def _safe_volume_mesh(mesh: trimesh.Trimesh) -> float | None:
@@ -38,6 +59,9 @@ def _compare_exact(
     output_dir: Path,
     alignment: str,
     emit_diff_solids: bool,
+    render_diffs: bool = False,
+    blender_bin: Path | None = None,
+    render_spec_path: Path | None = None,
 ) -> CompareResult:
     aligned_right, alignment_payload = align_exact_shapes(left_shape, right_shape, alignment)
     try:
@@ -75,8 +99,25 @@ def _compare_exact(
             if _safe_volume_exact(shape) <= 0.0:
                 continue
             path = output_dir / f"{role}.step"
-            export_step(shape, path)
+            exportable = _to_exportable(shape)
+            export_step(exportable, path)
             artifacts.append(collect_file_artifact(path, role))
+
+    if render_diffs:
+        artifacts.extend(
+            _render_exact_diffs(
+                pieces={
+                    "left": (left_shape, left_volume),
+                    "right": (aligned_right, right_volume),
+                    "shared": (shared, shared_volume),
+                    "left_only": (left_only, left_only_volume),
+                    "right_only": (right_only, right_only_volume),
+                },
+                output_dir=output_dir,
+                blender_bin=blender_bin,
+                render_spec_path=render_spec_path,
+            )
+        )
 
     metrics_path = output_dir / "compare-metrics.json"
     result = CompareResult(
@@ -95,6 +136,51 @@ def _compare_exact(
     )
     write_json(metrics_path, result)
     return result
+
+
+def _render_exact_diffs(
+    *,
+    pieces: dict[str, tuple[Any, float]],
+    output_dir: Path,
+    blender_bin: Path | None,
+    render_spec_path: Path | None,
+) -> list[Any]:
+    """Export each diff piece to GLB, render an iso view, and compose a sheet."""
+    from .schemas import ArtifactRecord
+
+    render_spec = load_render_spec(render_spec_path)
+    cell_w = int(render_spec.get("width", 512))
+    cell_h = int(render_spec.get("height", 512))
+    diffs_dir = ensure_directory(output_dir / "diffs")
+    rendered_images: dict[str, Path] = {}
+    artifacts: list[ArtifactRecord] = []
+
+    for role, (shape, volume) in pieces.items():
+        if volume <= 0.0:
+            continue
+        glb_path = diffs_dir / f"{role}.glb"
+        exportable = _to_exportable(shape)
+        try:
+            export_gltf(exportable, glb_path, binary=True)
+        except Exception:  # pragma: no cover - geometry export edge case
+            continue
+        png_path = diffs_dir / f"{role}.png"
+        render_single_view(
+            glb_path=glb_path,
+            output_path=png_path,
+            blender_bin=blender_bin,
+            base_color=COMPARE_COLORS.get(role),
+            spec_overrides={"width": cell_w, "height": cell_h},
+        )
+        rendered_images[role] = png_path
+        artifacts.append(collect_file_artifact(png_path, f"{role}_render"))
+
+    if rendered_images:
+        sheet_path = output_dir / "compare-sheet.png"
+        compose_compare_sheet(rendered_images, sheet_path, cell_w, cell_h)
+        artifacts.append(collect_file_artifact(sheet_path, "compare_sheet"))
+
+    return artifacts
 
 
 def _run_boolean(
@@ -182,9 +268,15 @@ def run_compare(
     output_dir: Path,
     alignment: str,
     emit_diff_solids: bool,
+    render_diffs: bool = False,
+    blender_bin: Path | None = None,
+    render_spec_path: Path | None = None,
 ) -> CompareResult:
     # CAD-F-008 / CAD-F-010 / CAD-D-006 / CAD-D-007.
     ensure_directory(output_dir)
+    # --render-diffs implies --emit-diff-solids for exact mode.
+    if render_diffs:
+        emit_diff_solids = True
     left = load_geometry_artifact(left_path)
     right = load_geometry_artifact(right_path)
     if left.mode == "exact" and right.mode == "exact":
@@ -196,6 +288,9 @@ def run_compare(
             output_dir,
             alignment,
             emit_diff_solids,
+            render_diffs=render_diffs,
+            blender_bin=blender_bin,
+            render_spec_path=render_spec_path,
         )
     if left.mesh is None or right.mesh is None:
         raise GeometryError(

@@ -48,15 +48,21 @@ def frame_scale(obj: bpy.types.Object) -> float:
     return max(dimensions.x, dimensions.y, dimensions.z, 1.0)
 
 
-def apply_object_material(obj: bpy.types.Object) -> None:
+def apply_object_material(
+    obj: bpy.types.Object, base_color: tuple | None = None
+) -> None:
     material = bpy.data.materials.new(name="cad_cli_clay")
     material.use_nodes = True
     principled = material.node_tree.nodes["Principled BSDF"]
     # CAD-F-021: matte, lightly tinted verification material keeps surfaces legible
     # without pushing the part into blinding white highlights or a strong color cast.
-    principled.inputs["Base Color"].default_value = (0.66, 0.73, 0.79, 1.0)
-    principled.inputs["Roughness"].default_value = 0.86
-    principled.inputs["Specular IOR Level"].default_value = 0.14
+    has_custom_color = base_color is not None
+    color = base_color if has_custom_color else (0.66, 0.73, 0.79, 1.0)
+    principled.inputs["Base Color"].default_value = color
+    # When a custom colour is provided (e.g. compare-diff renders), use lower
+    # roughness and higher specular so the tint is clearly visible.
+    principled.inputs["Roughness"].default_value = 0.55 if has_custom_color else 0.86
+    principled.inputs["Specular IOR Level"].default_value = 0.38 if has_custom_color else 0.14
     principled.inputs["Coat Roughness"].default_value = 0.55
     if obj.data.materials:
         obj.data.materials[0] = material
@@ -272,7 +278,9 @@ def main(argv: list[str]) -> None:
     objects = import_glb(glb_path)
     obj = objects[0]
     scale = frame_scale(obj)
-    apply_object_material(obj)
+    raw_color = spec.get("base_color")
+    color_tuple = tuple(raw_color) if raw_color else None
+    apply_object_material(obj, base_color=color_tuple)
     add_lights(scale)
 
     cameras = {
@@ -334,7 +342,10 @@ def main(argv: list[str]) -> None:
         ),
     }
 
+    requested_views = spec.get("views")
     for name, camera in cameras.items():
+        if requested_views is not None and name not in requested_views:
+            continue
         render_camera(scene, camera, output_dir / f"{name}.png")
 
 
