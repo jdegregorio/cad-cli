@@ -23,7 +23,7 @@ from .geometry import (
 from .schemas import InspectResult
 
 
-def _summary_exact(shape: Any) -> dict[str, object]:
+def _summary_exact(shape: Any) -> dict[str, Any]:
     bbox = bounding_box_record_from_exact(shape)
     holes = exact_hole_features(shape)
     return {
@@ -37,7 +37,7 @@ def _summary_exact(shape: Any) -> dict[str, object]:
     }
 
 
-def _summary_mesh(mesh: trimesh.Trimesh) -> dict[str, object]:
+def _summary_mesh(mesh: trimesh.Trimesh) -> dict[str, Any]:
     bbox = bounding_box_record_from_mesh(mesh)
     return {
         "bounding_box": bbox,
@@ -54,12 +54,28 @@ def inspect_summary(artifact_path: Path) -> InspectResult:
     if artifact.mode == "exact":
         assert artifact.exact_shape is not None
         data = _summary_exact(artifact.exact_shape)
+        dims = data["dimensions"]
+        vol = data["volume"]
+        dims_str = f"{dims[0]:.4f} x {dims[1]:.4f} x {dims[2]:.4f}"
+        summary = (
+            f"Summary of {artifact_path.name} [exact]: "
+            f"{dims_str}, vol={vol:.4f}, "
+            f"{data['solid_count']} solid(s), {len(data['holes'])} hole(s)"
+        )
     else:
         assert artifact.mesh is not None
         data = _summary_mesh(artifact.mesh)
+        dims = data["dimensions"]
+        vol = data["volume"]
+        dims_str = f"{dims[0]:.4f} x {dims[1]:.4f} x {dims[2]:.4f}"
+        vol_str = f"{vol:.4f}" if vol is not None else "N/A"
+        summary = (
+            f"Summary of {artifact_path.name} [mesh]: "
+            f"{dims_str}, vol={vol_str}, {data['face_count']} faces"
+        )
     return InspectResult(
         command="inspect summary",
-        summary=f"Inspected summary for {artifact_path.name}",
+        summary=summary,
         artifact_path=str(artifact_path.resolve()),
         mode=artifact.mode,
         data=data,
@@ -76,7 +92,10 @@ def inspect_bbox(artifact_path: Path) -> InspectResult:
         bbox = bounding_box_record_from_mesh(artifact.mesh)
     return InspectResult(
         command="inspect bbox",
-        summary=f"Computed bounding box for {artifact_path.name}",
+        summary=(
+            f"Bounding box of {artifact_path.name}: "
+            f"{bbox.size[0]:.4f} x {bbox.size[1]:.4f} x {bbox.size[2]:.4f}"
+        ),
         artifact_path=str(artifact_path.resolve()),
         mode=artifact.mode,
         data={"bounding_box": bbox, "dimensions": bbox.size},
@@ -92,9 +111,10 @@ def inspect_volume(artifact_path: Path) -> InspectResult:
     else:
         assert artifact.mesh is not None
         volume = float(artifact.mesh.volume) if artifact.mesh.is_volume else None
+    volume_str = f"{volume:.4f}" if volume is not None else "N/A (non-watertight mesh)"
     return InspectResult(
         command="inspect volume",
-        summary=f"Computed volume for {artifact_path.name}",
+        summary=f"Volume of {artifact_path.name}: {volume_str}",
         artifact_path=str(artifact_path.resolve()),
         mode=artifact.mode,
         data={"volume": volume},

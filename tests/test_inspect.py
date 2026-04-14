@@ -90,7 +90,11 @@ def test_inspect_mesh_summary_and_volume_contract(
     assert all(value > 0 for value in bbox_payload["data"]["bounding_box"]["size"])
 
     assert "volume" in volume_payload["data"]
-    assert text_volume.stdout.strip() == "Computed volume for model.glb"
+    vol_text = text_volume.stdout.strip()
+    assert vol_text.startswith("Volume of model.glb:"), f"Unexpected text output: {vol_text!r}"
+    assert any(c.isdigit() for c in vol_text) or "N/A" in vol_text, (
+        f"Volume text must contain a numeric value or N/A explanation, got: {vol_text!r}"
+    )
 
 
 def test_inspect_exact_failure_paths(tmp_path: Path, examples_dir: Path) -> None:
@@ -173,3 +177,111 @@ def test_inspect_mesh_thickness_reports_optional_dependency_or_value(
         payload = json.loads(thickness.stdout)
         assert payload["mode"] == "mesh"
         assert payload["data"]["thickness"] > 0
+
+
+def test_inspect_text_format_shows_actual_data(tmp_path: Path, examples_dir: Path) -> None:
+    """Regression: text format for inspect commands must output actual metric values.
+
+    Previously, inspect summary/bbox/volume all emitted a generic "Computed X for file"
+    message with no actual data, making the default text format useless.
+    """
+    build_dir = build_fixture(tmp_path, examples_dir, "box.py")
+
+    # inspect volume (exact) – must include the actual volume number
+    vol_exact = run_cad("inspect", "volume", str(build_dir / "model.step"))
+    assert vol_exact.returncode == 0, vol_exact.stderr
+    vol_text = vol_exact.stdout.strip()
+    assert vol_text.startswith("Volume of model.step:"), f"Got: {vol_text!r}"
+    assert "6000" in vol_text, f"Volume value missing from: {vol_text!r}"
+
+    # inspect volume (mesh) – must include a numeric value or N/A, not a generic success message
+    vol_mesh = run_cad("inspect", "volume", str(build_dir / "model.glb"))
+    assert vol_mesh.returncode == 0, vol_mesh.stderr
+    vol_mesh_text = vol_mesh.stdout.strip()
+    assert vol_mesh_text.startswith("Volume of model.glb:"), f"Got: {vol_mesh_text!r}"
+    assert any(c.isdigit() for c in vol_mesh_text) or "N/A" in vol_mesh_text, (
+        f"Volume text must contain a numeric value or N/A explanation, got: {vol_mesh_text!r}"
+    )
+
+    # inspect bbox (exact) – must include actual dimensions
+    bbox_exact = run_cad("inspect", "bbox", str(build_dir / "model.step"))
+    assert bbox_exact.returncode == 0, bbox_exact.stderr
+    bbox_text = bbox_exact.stdout.strip()
+    assert bbox_text.startswith("Bounding box of model.step:"), f"Got: {bbox_text!r}"
+    assert "10" in bbox_text and "20" in bbox_text and "30" in bbox_text, (
+        f"Dimension values missing from: {bbox_text!r}"
+    )
+
+    # inspect bbox (mesh) – must include numeric dimensions
+    bbox_mesh = run_cad("inspect", "bbox", str(build_dir / "model.glb"))
+    assert bbox_mesh.returncode == 0, bbox_mesh.stderr
+    bbox_mesh_text = bbox_mesh.stdout.strip()
+    assert bbox_mesh_text.startswith("Bounding box of model.glb:"), f"Got: {bbox_mesh_text!r}"
+    assert any(c.isdigit() for c in bbox_mesh_text), "BBox text must contain numeric values"
+
+    # inspect summary (exact) – must include mode, dimensions, and volume
+    summary_exact = run_cad("inspect", "summary", str(build_dir / "model.step"))
+    assert summary_exact.returncode == 0, summary_exact.stderr
+    summary_text = summary_exact.stdout.strip()
+    assert "model.step" in summary_text, f"Got: {summary_text!r}"
+    assert "exact" in summary_text, f"Mode missing from: {summary_text!r}"
+    assert "6000" in summary_text, f"Volume missing from: {summary_text!r}"
+    assert "10" in summary_text and "20" in summary_text and "30" in summary_text, (
+        f"Dimensions missing from: {summary_text!r}"
+    )
+
+    # inspect summary (mesh) – must include mode and numeric values
+    summary_mesh = run_cad("inspect", "summary", str(build_dir / "model.glb"))
+    assert summary_mesh.returncode == 0, summary_mesh.stderr
+    summary_mesh_text = summary_mesh.stdout.strip()
+    assert "model.glb" in summary_mesh_text, f"Got: {summary_mesh_text!r}"
+    assert "mesh" in summary_mesh_text, f"Mode missing from: {summary_mesh_text!r}"
+    assert any(c.isdigit() for c in summary_mesh_text), "Summary text must contain numeric values"
+
+
+def test_inspect_holes_text_format(tmp_path: Path, examples_dir: Path) -> None:
+    """Text format for inspect holes must report the count of holes found."""
+    build_dir = build_fixture(tmp_path, examples_dir, "hole_plate.py")
+
+    text_holes = run_cad("inspect", "holes", str(build_dir / "model.step"))
+    assert text_holes.returncode == 0, text_holes.stderr
+    holes_text = text_holes.stdout.strip()
+    assert any(c.isdigit() for c in holes_text), (
+        f"Hole count missing from text output: {holes_text!r}"
+    )
+    assert "hole" in holes_text.lower(), f"Got: {holes_text!r}"
+
+
+def test_inspect_center_distance_and_thickness_text_format(
+    tmp_path: Path, examples_dir: Path
+) -> None:
+    """Text format for center-distance and thickness already embeds the key value; verify it still does."""
+    build_dir = build_fixture(tmp_path, examples_dir, "hole_plate.py")
+
+    cd = run_cad(
+        "inspect",
+        "center-distance",
+        str(build_dir / "model.step"),
+        "--feature-a",
+        "hole-1",
+        "--feature-b",
+        "hole-2",
+    )
+    assert cd.returncode == 0, cd.stderr
+    cd_text = cd.stdout.strip()
+    assert "hole-1" in cd_text and "hole-2" in cd_text, f"Feature IDs missing from: {cd_text!r}"
+    assert any(c.isdigit() for c in cd_text), f"Distance value missing from: {cd_text!r}"
+
+    thickness = run_cad(
+        "inspect",
+        "thickness",
+        str(build_dir / "model.step"),
+        "--point",
+        "0,0.009,0",
+        "--direction",
+        "y",
+    )
+    assert thickness.returncode == 0, thickness.stderr
+    th_text = thickness.stdout.strip()
+    assert "y" in th_text, f"Direction missing from: {th_text!r}"
+    assert any(c.isdigit() for c in th_text), f"Thickness value missing from: {th_text!r}"
