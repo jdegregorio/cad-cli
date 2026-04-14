@@ -2,7 +2,7 @@
 
 **A deterministic CAD toolchain in a single command.** Take a Python model from
 source → STEP / GLB → previews → diffs → a hashed review bundle, all from a
-stable, scriptable CLI.
+stable, scriptable CLI. 
 
 `cad-cli` is the portable geometry toolchain used by
 [Formloop](https://github.com/jdegregorio/formloop/tree/main). It keeps CAD
