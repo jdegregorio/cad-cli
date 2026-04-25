@@ -5,17 +5,19 @@ from __future__ import annotations
 import importlib.metadata
 import importlib.util
 import json
+import subprocess
+import tempfile
 import types
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from build123d import export_gltf, export_step, export_stl
+from build123d import export_gltf, export_step, export_stl, import_step
 
-from . import __version__
+from . import __version__, _build_worker
 from .artifacts import collect_file_artifact, copy_file, ensure_directory, write_json
-from .errors import GeometryError, InputError
+from .errors import GeometryError, InputError, MissingDependencyError
 from .geometry import bounding_box_record_from_exact
 from .schemas import BuildResult, TraceRecord
 
@@ -95,6 +97,65 @@ def _validate_shape(result: Any) -> Any:
     raise GeometryError("Model callable did not return a build123d shape/part/compound")
 
 
+def _build_step_in_subprocess(
+    *,
+    python_path: Path,
+    model_path: Path,
+    callable_name: str,
+    params: dict[str, Any],
+    output_dir: Path,
+    step_path: Path,
+) -> None:
+    """Execute the model callable in `python_path` and emit a STEP artifact.
+
+    The user's interpreter handles model evaluation (so operators can bring
+    their own libraries / build123d version); STEP is the handoff back to
+    cad-cli, which performs presentation exports (GLB/STL) and metadata.
+    """
+    if not python_path.exists():
+        raise InputError(f"--python interpreter does not exist: {python_path}")
+
+    # Pass the worker source via `-c` rather than as a script path so the
+    # subprocess's sys.path[0] is "" (cwd) instead of the cad-cli package
+    # directory. Otherwise sibling modules like cad_cli.inspect would shadow
+    # the stdlib `inspect` module that build123d imports at startup.
+    worker_source = Path(_build_worker.__file__).read_text()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        spec_path = Path(tmpdir) / "build-spec.json"
+        spec_path.write_text(
+            json.dumps(
+                {
+                    "model_path": str(model_path.resolve()),
+                    "callable_name": callable_name,
+                    "params": params,
+                    "source_path": str(model_path.resolve()),
+                    "output_dir": str(output_dir.resolve()),
+                    "step_path": str(step_path.resolve()),
+                }
+            )
+        )
+        completed = subprocess.run(
+            [str(python_path), "-c", worker_source, str(spec_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    if completed.returncode == 0:
+        return
+    stderr = (completed.stderr or "").strip() or "(no stderr)"
+    if completed.returncode == 2:
+        raise InputError(stderr)
+    if completed.returncode == 3:
+        raise MissingDependencyError(stderr)
+    if completed.returncode == 5:
+        raise GeometryError(stderr)
+    raise GeometryError(
+        f"Model build subprocess failed (exit {completed.returncode}) using {python_path}:"
+        f"\n{stderr}"
+    )
+
+
 def run_build(
     *,
     model_path: Path,
@@ -105,28 +166,48 @@ def run_build(
     emit_stl: bool,
     snapshot_source: bool,
     raw_args: list[str],
+    python_path: Path | None = None,
 ) -> BuildResult:
     # CAD-F-003 / CAD-F-004 / CAD-F-017: deterministic build outputs with traceable metadata.
     if not model_path.exists():
         raise InputError(f"Model source does not exist: {model_path}")
     ensure_directory(output_dir)
     params = load_params(params_path, overrides)
-    build_callable = _load_build_callable(model_path, callable_name)
-    context = BuildInvocationContext(
-        source_path=str(model_path.resolve()),
-        output_dir=str(output_dir.resolve()),
-        callable_name=callable_name,
-    )
-    shape = _validate_shape(build_callable(params, context))
 
     step_path = output_dir / "model.step"
     glb_path = output_dir / "model.glb"
     metadata_path = output_dir / "build-metadata.json"
+    stl_path = output_dir / "model.stl" if emit_stl else None
+
+    if python_path is not None:
+        # CAD-F-022: evaluate the model in an operator-supplied interpreter.
+        _build_step_in_subprocess(
+            python_path=python_path,
+            model_path=model_path,
+            callable_name=callable_name,
+            params=params,
+            output_dir=output_dir,
+            step_path=step_path,
+        )
+        try:
+            shape = _validate_shape(import_step(step_path))
+        except Exception as exc:
+            raise GeometryError(
+                f"Failed to load STEP produced by --python subprocess: {exc}"
+            ) from exc
+    else:
+        build_callable = _load_build_callable(model_path, callable_name)
+        context = BuildInvocationContext(
+            source_path=str(model_path.resolve()),
+            output_dir=str(output_dir.resolve()),
+            callable_name=callable_name,
+        )
+        shape = _validate_shape(build_callable(params, context))
 
     try:
-        export_step(shape, step_path)
+        if python_path is None:
+            export_step(shape, step_path)
         export_gltf(shape, glb_path, binary=True)
-        stl_path = output_dir / "model.stl" if emit_stl else None
         if stl_path is not None:
             export_stl(shape, stl_path)
     except Exception as exc:  # pragma: no cover - surfaced via integration tests

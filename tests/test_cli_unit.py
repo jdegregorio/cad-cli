@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -44,6 +45,69 @@ def test_main_json_output_for_helpful_command(tmp_path, capsys, examples_dir) ->
     payload = json.loads(captured.out)
     assert payload["command"] == "build"
     assert payload["schema_version"] == 1
+
+
+def test_build_python_flag_parses_into_path(examples_dir) -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "build",
+            str(examples_dir / "box.py"),
+            "--output-dir",
+            "out",
+            "--python",
+            "/usr/local/bin/python",
+        ]
+    )
+    assert isinstance(args.python_path, Path)
+    assert str(args.python_path) == "/usr/local/bin/python"
+
+
+def test_build_python_flag_default_is_none(examples_dir) -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        ["build", str(examples_dir / "box.py"), "--output-dir", "out"]
+    )
+    assert args.python_path is None
+
+
+def test_build_python_missing_interpreter_returns_input_error(
+    tmp_path, examples_dir
+) -> None:
+    output_dir = tmp_path / "build"
+    exit_code = main(
+        [
+            "build",
+            str(examples_dir / "box.py"),
+            "--output-dir",
+            str(output_dir),
+            "--python",
+            str(tmp_path / "no-such-python"),
+        ]
+    )
+    assert exit_code == 2
+
+
+def test_build_python_subprocess_produces_artifacts(tmp_path, examples_dir) -> None:
+    """End-to-end check: passing --python <current interpreter> still builds."""
+    output_dir = tmp_path / "build"
+    exit_code = main(
+        [
+            "build",
+            str(examples_dir / "box.py"),
+            "--output-dir",
+            str(output_dir),
+            "--python",
+            sys.executable,
+            "--emit-stl",
+        ]
+    )
+    assert exit_code == 0
+    assert (output_dir / "model.step").exists()
+    assert (output_dir / "model.glb").exists()
+    assert (output_dir / "model.stl").exists()
+    metadata = json.loads((output_dir / "build-metadata.json").read_text())
+    assert metadata["volume"] == 6000.0
 
 
 # ---------------------------------------------------------------------------

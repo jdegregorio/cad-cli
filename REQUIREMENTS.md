@@ -27,6 +27,7 @@
 | CAD-F-019 | All rendered preview images shall show the full geometry, fit to the size of the part, without clipping the model at image boundaries.                              | Preview renders are only useful if the full part is visible and framed consistently for review.                 | Completed |
 | CAD-F-020 | Rendered previews shall include clear datum-oriented orthographic views plus at least one standard angled view such as isometric.                                    | Engineering review needs both datum-aligned inspection views and an angled view for overall shape comprehension. | Completed |
 | CAD-F-021 | Rendered previews shall emphasize silhouette and feature edges enough for human verification of faces, holes, and other surface transitions.                        | Review renders need edge readability, not only soft shaded massing.                                             | Completed |
+| CAD-F-022 | `cad build` shall accept an optional `--python PATH` flag that evaluates the model callable in the supplied interpreter while cad-cli owns presentation exports and metadata. | Operators need to evaluate models against their own project venv (matching their test environment) without forcing cad-cli's pinned dependencies. | Completed |
 
 ### Non-functional requirements
 

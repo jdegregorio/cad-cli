@@ -280,6 +280,20 @@ def _add_build_parser(subparsers: argparse._SubParsersAction) -> None:
             "build directory is self-contained for archival or packaging."
         ),
     )
+    build_parser.add_argument(
+        "--python",
+        dest="python_path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Path to a Python interpreter (typically a project venv's "
+            "bin/python) used to evaluate the model in a subprocess. cad-cli "
+            "still handles GLB/STL export and metadata in its own environment, "
+            "but the model callable runs against the libraries installed in "
+            "the supplied interpreter — useful when tests and builds should "
+            "share a venv. The interpreter must have build123d available."
+        ),
+    )
     _add_format_arg(build_parser)
 
 
@@ -861,6 +875,7 @@ def main(argv: list[str] | None = None) -> int:
                 emit_stl=args.emit_stl,
                 snapshot_source=args.snapshot_source,
                 raw_args=raw_args,
+                python_path=args.python_path,
             )
             emit_result(result, args.format)
             return 0
