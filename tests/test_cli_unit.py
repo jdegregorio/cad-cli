@@ -47,6 +47,129 @@ def test_main_json_output_for_helpful_command(tmp_path, capsys, examples_dir) ->
 
 
 # ---------------------------------------------------------------------------
+# Error reporting: structured JSON error shape on stderr
+# ---------------------------------------------------------------------------
+
+
+def _write_raising_model(tmp_path: Path, body: str) -> Path:
+    model = tmp_path / "broken.py"
+    model.write_text(body)
+    return model
+
+
+def test_error_json_shape_on_callable_exception(tmp_path, capsys) -> None:
+    model = _write_raising_model(
+        tmp_path,
+        "def build_model(params, context):\n"
+        "    raise ValueError('bad geometry input')\n",
+    )
+    exit_code = main(
+        [
+            "build",
+            str(model),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--format",
+            "json",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == 5  # GeometryError
+    assert captured.out == ""
+    payload = json.loads(captured.err)
+    assert set(payload["error"].keys()) == {
+        "type",
+        "message",
+        "traceback",
+        "cause",
+        "exit_code",
+    }
+    assert payload["error"]["type"] == "GeometryError"
+    assert payload["error"]["exit_code"] == 5
+    assert "ValueError" in payload["error"]["message"]
+    assert "bad geometry input" in payload["error"]["message"]
+    assert payload["error"]["cause"] == {
+        "type": "ValueError",
+        "message": "bad geometry input",
+    }
+    tb = payload["error"]["traceback"]
+    assert tb is not None
+    assert "ValueError: bad geometry input" in tb
+    assert "build_model" in tb
+
+
+def test_error_json_shape_on_import_failure(tmp_path, capsys) -> None:
+    model = _write_raising_model(
+        tmp_path,
+        "import does_not_exist_xyz  # noqa: F401\n"
+        "def build_model(params, context):\n"
+        "    return None\n",
+    )
+    exit_code = main(
+        [
+            "build",
+            str(model),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--format",
+            "json",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == 2  # InputError
+    payload = json.loads(captured.err)
+    assert payload["error"]["type"] == "InputError"
+    assert payload["error"]["cause"]["type"] == "ModuleNotFoundError"
+    assert "does_not_exist_xyz" in payload["error"]["traceback"]
+
+
+def test_error_text_format_keeps_one_line_message(tmp_path, capsys) -> None:
+    model = _write_raising_model(
+        tmp_path,
+        "def build_model(params, context):\n"
+        "    raise RuntimeError('boom')\n",
+    )
+    exit_code = main(
+        [
+            "build",
+            str(model),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == 5
+    # First line is the human-readable message; traceback follows for debugging.
+    first_line = captured.err.splitlines()[0]
+    assert "RuntimeError" in first_line
+    assert "boom" in first_line
+    # Stderr is not parseable as JSON in text mode.
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(captured.err)
+
+
+def test_error_json_shape_for_input_error_without_traceback(capsys) -> None:
+    # Missing model triggers InputError raised directly (no chained exception).
+    exit_code = main(
+        [
+            "build",
+            "definitely_missing.py",
+            "--output-dir",
+            "out",
+            "--format",
+            "json",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.err)
+    assert payload["error"]["type"] == "InputError"
+    assert payload["error"]["traceback"] is None
+    assert payload["error"]["cause"] is None
+    assert "definitely_missing.py" in payload["error"]["message"]
+
+
+# ---------------------------------------------------------------------------
 # Unit tests for compare helper functions
 # ---------------------------------------------------------------------------
 

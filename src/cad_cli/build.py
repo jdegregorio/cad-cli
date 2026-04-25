@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.metadata
 import importlib.util
 import json
+import traceback
 import types
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -32,7 +33,16 @@ def _load_python_module(model_path: Path) -> types.ModuleType:
     if spec is None or spec.loader is None:
         raise InputError(f"Unable to import model source: {model_path}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        raise InputError(
+            f"Failed to import model source '{model_path}': "
+            f"{type(exc).__name__}: {exc}",
+            traceback_str=traceback.format_exc(),
+            cause_type=type(exc).__name__,
+            cause_message=str(exc),
+        ) from exc
     return module
 
 
@@ -117,7 +127,17 @@ def run_build(
         output_dir=str(output_dir.resolve()),
         callable_name=callable_name,
     )
-    shape = _validate_shape(build_callable(params, context))
+    try:
+        raw_shape = build_callable(params, context)
+    except Exception as exc:
+        raise GeometryError(
+            f"Model callable '{callable_name}' raised "
+            f"{type(exc).__name__}: {exc}",
+            traceback_str=traceback.format_exc(),
+            cause_type=type(exc).__name__,
+            cause_message=str(exc),
+        ) from exc
+    shape = _validate_shape(raw_shape)
 
     step_path = output_dir / "model.step"
     glb_path = output_dir / "model.glb"
@@ -130,7 +150,12 @@ def run_build(
         if stl_path is not None:
             export_stl(shape, stl_path)
     except Exception as exc:  # pragma: no cover - surfaced via integration tests
-        raise GeometryError(f"Failed to export build artifacts: {exc}") from exc
+        raise GeometryError(
+            f"Failed to export build artifacts: {type(exc).__name__}: {exc}",
+            traceback_str=traceback.format_exc(),
+            cause_type=type(exc).__name__,
+            cause_message=str(exc),
+        ) from exc
 
     snapshot_path: Path | None = None
     if snapshot_source:

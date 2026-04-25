@@ -4,13 +4,29 @@ from __future__ import annotations
 
 
 class CadCliError(Exception):
-    """Base error with a stable exit code."""
+    """Base error with a stable exit code.
+
+    Errors raised at internal boundaries (model import, callable invocation,
+    artifact export) carry the originating traceback and exception identity
+    so the CLI can surface them in --format json output without callers
+    string-scraping the message.
+    """
 
     exit_code = 1
 
-    def __init__(self, message: str) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        traceback_str: str | None = None,
+        cause_type: str | None = None,
+        cause_message: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
+        self.traceback_str = traceback_str
+        self.cause_type = cause_type
+        self.cause_message = cause_message
 
 
 class InputError(CadCliError):
