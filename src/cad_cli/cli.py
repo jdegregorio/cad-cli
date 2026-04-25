@@ -213,7 +213,7 @@ def _add_format_arg(parser: argparse.ArgumentParser) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _add_build_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_build_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         """\
         Build a Python model source into deterministic CAD artifacts.
@@ -333,10 +333,24 @@ def _add_build_parser(subparsers: argparse._SubParsersAction) -> None:
             "build directory is self-contained for archival or packaging."
         ),
     )
+    build_parser.add_argument(
+        "--python",
+        dest="python_path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Path to a Python interpreter (typically a project venv's "
+            "bin/python) used to evaluate the model in a subprocess. cad-cli "
+            "still handles GLB/STL export and metadata in its own environment, "
+            "but the model callable runs against the libraries installed in "
+            "the supplied interpreter — useful when tests and builds should "
+            "share a venv. The interpreter must have build123d available."
+        ),
+    )
     _add_format_arg(build_parser)
 
 
-def _add_render_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_render_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         f"""\
         Render a GLB artifact into a deterministic set of verification preview
@@ -423,7 +437,7 @@ def _add_render_parser(subparsers: argparse._SubParsersAction) -> None:
     _add_format_arg(render_parser)
 
 
-def _add_compare_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_compare_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         f"""\
         Compare two geometry artifacts and emit scriptable metrics plus
@@ -557,7 +571,7 @@ def _add_compare_parser(subparsers: argparse._SubParsersAction) -> None:
     _add_format_arg(compare_parser)
 
 
-def _add_inspect_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_inspect_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         """\
         Inspect a single geometry artifact.
@@ -781,7 +795,7 @@ def _add_inspect_parser(subparsers: argparse._SubParsersAction) -> None:
     _add_format_arg(thickness_parser)
 
 
-def _add_package_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_package_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         """\
         Collect build, render, compare, and extra outputs into a single zip
@@ -915,6 +929,7 @@ def main(argv: list[str] | None = None) -> int:
                 emit_stl=args.emit_stl,
                 snapshot_source=args.snapshot_source,
                 raw_args=raw_args,
+                python_path=args.python_path,
             )
             emit_result(result, args.format)
             return 0

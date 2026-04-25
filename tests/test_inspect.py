@@ -255,7 +255,7 @@ def test_inspect_holes_text_format(tmp_path: Path, examples_dir: Path) -> None:
 def test_inspect_center_distance_and_thickness_text_format(
     tmp_path: Path, examples_dir: Path
 ) -> None:
-    """Text format for center-distance and thickness already embeds the key value; verify it still does."""
+    """Text format for center-distance and thickness embeds the key value; verify it still does."""
     build_dir = build_fixture(tmp_path, examples_dir, "hole_plate.py")
 
     cd = run_cad(

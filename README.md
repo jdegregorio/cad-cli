@@ -161,6 +161,18 @@ uv run cad build plate.py --output-dir out/build \
 `--set` values are parsed as JSON first, so numbers, booleans, arrays, and
 objects all work. Dotted keys set nested values.
 
+**Bring your own venv with `--python`.** When the model lives in a project that
+already has a virtualenv (typically the same one your tests run against), point
+`cad build` at that interpreter so the model callable is evaluated against the
+libraries it depends on. cad-cli still owns the GLB/STL exports and metadata in
+its own environment — STEP is the handoff between the two. The supplied
+interpreter must have `build123d` available.
+
+```bash
+uv run cad build my_model.py --output-dir out/build \
+    --python /path/to/project/.venv/bin/python
+```
+
 ---
 
 ## `cad render`
