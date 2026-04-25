@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.2](https://github.com/jdegregorio/cad-cli/compare/v0.1.1...v0.1.2) (2026-04-25)
+
+
+### Features
+
+* **build:** add --python option for operator-supplied interpreter ([38b20b7](https://github.com/jdegregorio/cad-cli/commit/38b20b73c6a0fe5cf70fe1ce541d84715a906299))
+* **build:** add --python option for operator-supplied interpreter ([7f322d7](https://github.com/jdegregorio/cad-cli/commit/7f322d7b7e522e0af4483ec00e7b6075265cae6a))
+* capture tracebacks and emit structured JSON errors ([8073996](https://github.com/jdegregorio/cad-cli/commit/8073996f44cb2cdd046b79fa3d38d5e96a3b4c72))
+* capture tracebacks and emit structured JSON errors ([ceee0d8](https://github.com/jdegregorio/cad-cli/commit/ceee0d8a4c6901f433ed3e44d9b9d76ef5a88891))
+
 ## [0.1.1](https://github.com/jdegregorio/cad-cli/compare/v0.1.0...v0.1.1) (2026-04-14)
 
 

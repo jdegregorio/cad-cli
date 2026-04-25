@@ -1,6 +1,6 @@
 [project]
 name = "cad-cli"
-version = "0.1.1"
+version = "0.1.2"
 description = "Deterministic CAD CLI for building, rendering, comparing, inspecting, and packaging 3D artifacts."
 readme = "README.md"
 requires-python = ">=3.12"
