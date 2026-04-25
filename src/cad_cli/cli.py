@@ -160,7 +160,7 @@ def _add_format_arg(parser: argparse.ArgumentParser) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _add_build_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_build_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         """\
         Build a Python model source into deterministic CAD artifacts.
@@ -297,7 +297,7 @@ def _add_build_parser(subparsers: argparse._SubParsersAction) -> None:
     _add_format_arg(build_parser)
 
 
-def _add_render_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_render_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         f"""\
         Render a GLB artifact into a deterministic set of verification preview
@@ -384,7 +384,7 @@ def _add_render_parser(subparsers: argparse._SubParsersAction) -> None:
     _add_format_arg(render_parser)
 
 
-def _add_compare_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_compare_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         f"""\
         Compare two geometry artifacts and emit scriptable metrics plus
@@ -518,7 +518,7 @@ def _add_compare_parser(subparsers: argparse._SubParsersAction) -> None:
     _add_format_arg(compare_parser)
 
 
-def _add_inspect_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_inspect_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         """\
         Inspect a single geometry artifact.
@@ -742,7 +742,7 @@ def _add_inspect_parser(subparsers: argparse._SubParsersAction) -> None:
     _add_format_arg(thickness_parser)
 
 
-def _add_package_parser(subparsers: argparse._SubParsersAction) -> None:
+def _add_package_parser(subparsers: argparse._SubParsersAction[CadArgumentParser]) -> None:
     description = textwrap.dedent(
         """\
         Collect build, render, compare, and extra outputs into a single zip
