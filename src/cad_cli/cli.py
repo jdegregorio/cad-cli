@@ -131,6 +131,59 @@ def emit_result(result: Any, output_format: str) -> None:
     print(result.summary)
 
 
+def _detect_format_from_argv(raw_args: list[str]) -> str:
+    """Best-effort --format detection used when argparse failed before we got args."""
+    try:
+        idx = raw_args.index("--format")
+    except ValueError:
+        return "text"
+    if idx + 1 >= len(raw_args):
+        return "text"
+    value = raw_args[idx + 1]
+    return value if value in ("text", "json") else "text"
+
+
+def emit_error(exc: CadCliError, output_format: str) -> None:
+    """Emit a CadCliError on stderr. JSON shape is stable for downstream tools.
+
+    With --format json, stderr receives:
+
+        {
+          "error": {
+            "type": <exception class name, e.g. "GeometryError">,
+            "message": <human-readable message>,
+            "traceback": <traceback.format_exc() string or null>,
+            "cause": {"type": ..., "message": ...} or null,
+            "exit_code": <int>
+          }
+        }
+
+    With --format text, stderr keeps the existing one-line message; if a
+    traceback was captured, it is appended below for human debugging.
+    """
+    if output_format == "json":
+        cause: dict[str, str] | None = None
+        if exc.cause_type is not None or exc.cause_message is not None:
+            cause = {
+                "type": exc.cause_type or type(exc).__name__,
+                "message": exc.cause_message or exc.message,
+            }
+        payload = {
+            "error": {
+                "type": type(exc).__name__,
+                "message": exc.message,
+                "traceback": exc.traceback_str,
+                "cause": cause,
+                "exit_code": exc.exit_code,
+            }
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)
+        return
+    print(exc.message, file=sys.stderr)
+    if exc.traceback_str:
+        print(exc.traceback_str, file=sys.stderr, end="")
+
+
 def parse_point(value: str) -> list[float]:
     parts = value.split(",")
     if len(parts) != 3:
@@ -862,6 +915,7 @@ def build_parser() -> CadArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     raw_args = list(sys.argv[1:] if argv is None else argv)
+    args: argparse.Namespace | None = None
     try:
         args = parser.parse_args(raw_args)
         result: Any
@@ -934,7 +988,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         raise InputError(f"Unknown command: {args.command}")
     except CadCliError as exc:
-        print(exc.message, file=sys.stderr)
+        output_format = (
+            getattr(args, "format", None) if args is not None else None
+        ) or _detect_format_from_argv(raw_args)
+        emit_error(exc, output_format)
         return exc.exit_code
 
 
