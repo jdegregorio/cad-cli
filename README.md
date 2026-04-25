@@ -294,6 +294,50 @@ uv run cad package --output out/review.zip \
 | `6` | render pipeline failure |
 | `7` | compare pipeline failure |
 
+### Error reporting
+
+On failure, the CLI returns a non-zero exit code and writes diagnostics to
+**stderr**. The shape of stderr depends on `--format`:
+
+- **`--format text`** (default): a one-line human-readable message; if the
+  failure has a captured Python traceback, it is appended below the message
+  for easy debugging.
+- **`--format json`**: a stable JSON object suitable for programmatic
+  consumers (e.g. Formloop's `CadFailureFeedback.detail`). Stdout stays
+  empty on failure.
+
+```json
+{
+  "error": {
+    "type": "GeometryError",
+    "message": "Model callable 'build_model' raised ValueError: bad geometry input",
+    "traceback": "Traceback (most recent call last):\n  ...\nValueError: bad geometry input\n",
+    "cause": {
+      "type": "ValueError",
+      "message": "bad geometry input"
+    },
+    "exit_code": 5
+  }
+}
+```
+
+Field semantics (`schema_version: 1`, stable):
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `error.type` | `string` | The `CadCliError` subclass that was raised (`InputError`, `GeometryError`, `RenderError`, …). |
+| `error.message` | `string` | Human-readable summary; for wrapped failures includes the underlying exception type and message. |
+| `error.traceback` | `string` or `null` | `traceback.format_exc()` from the original Python exception when the failure occurred at a wrapped boundary (model import, callable execution, artifact export). `null` when the error was raised directly by the CLI without an underlying exception (e.g. a missing input file). |
+| `error.cause` | `object` or `null` | `{ "type": <python-exception-class>, "message": <str(exception)> }` when a Python exception was wrapped; `null` otherwise. |
+| `error.exit_code` | `integer` | Mirrors the process exit code (matches the table above). |
+
+Wrapped boundaries that capture `traceback`/`cause` today:
+
+- `cad build`: model import, model callable invocation, and STEP/GLB/STL export.
+
+Downstream tools should parse `error.cause.type` and `error.traceback`
+directly rather than string-scraping `error.message`.
+
 ---
 
 ## Development
